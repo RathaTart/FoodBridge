@@ -34,8 +34,8 @@ func StartBackgroundWorkers(db *gorm.DB) (stop func()) {
 	svc := booking.NewService(repo, booking.Config{
 		DayTZ:      loc,
 		QRSecret:   qrSecret,
-		QRTokenTTL: 10 * time.Minute,
-		HoldTTL:    10 * time.Minute,
+		QRTokenTTL: 30 * time.Minute,
+		HoldTTL:    30 * time.Minute,
 	}, pub)
 
 	stopExpiry := jobs.NewBookingExpiryWorker(svc, time.Minute).Start()
