@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 
-
 	"github.com/RathaTart/FoodBridge/dto"
 	"github.com/RathaTart/FoodBridge/entities"
 	"gorm.io/gorm"
@@ -33,13 +32,15 @@ func (r *repositoryImpl) CloseDepletedAll() error {
 		SET status = 'CLOSED'
 		WHERE p.status = 'OPEN'
 		  AND p.quantity IS NOT NULL
-		  AND p.quantity <= (
+		  AND (
+			p.quantity <= 0
+			OR p.quantity <= (
 				SELECT COUNT(*) FROM bookings b
 				WHERE b.post_id = p.post_id AND b.status = 'COMPLETED'
+			)
 		  )
 	`).Error
 }
-
 
 // ----------------- Post -----------------
 func (r *repositoryImpl) CreatePost(p *entities.Post) error {

@@ -108,17 +108,19 @@ func main() {
 				log.Printf("[auto-close] expired closed rows=%d", tx1.RowsAffected)
 			}
 
-			// 2) ปิดโพสต์ที่สต็อกหมด (จำนวน booking COMPLETED >= quantity)
+			// 2) ปิดโพสต์ที่สต็อกหมด (quantity <= 0 หรือ completed_count >= quantity)
 			tx2 := db.Exec(`
 				UPDATE posts p
 				SET status = 'CLOSED'
 				WHERE p.status = 'OPEN'
-				  AND p.quantity IS NOT NULL
-				  AND p.quantity > 0
-				  AND p.quantity <= (
+				AND p.quantity IS NOT NULL
+				AND (
+					p.quantity <= 0
+					OR p.quantity <= (
 						SELECT COUNT(*) FROM bookings b
 						WHERE b.post_id = p.post_id AND b.status = 'COMPLETED'
-				  )
+					)
+				)
 			`)
 			if tx2.Error != nil {
 				log.Printf("[auto-close] CloseDepleted error: %v", tx2.Error)
@@ -226,12 +228,14 @@ func main() {
 			UPDATE posts p
 			SET status = 'CLOSED'
 			WHERE p.status = 'OPEN'
-			  AND p.quantity IS NOT NULL
-			  AND p.quantity > 0
-			  AND p.quantity <= (
+			AND p.quantity IS NOT NULL
+			AND (
+				p.quantity <= 0
+				OR p.quantity <= (
 					SELECT COUNT(*) FROM bookings b
 					WHERE b.post_id = p.post_id AND b.status = 'COMPLETED'
-			  )
+				)
+			)
 		`)
 
 		return c.JSON(200, echo.Map{
@@ -275,11 +279,11 @@ func main() {
 	e.GET("/debug/post/:id/raw", func(c echo.Context) error {
 		id := c.Param("id")
 		type Row struct {
-			PostID    int64     `json:"post_id"`
-			Status    string    `json:"status"`
-			Quantity  *int64    `json:"quantity"`
-			CloseTime *time.Time`json:"close_time"`
-			DiffSec   *int64    `json:"diff_sec"`
+			PostID    int64      `json:"post_id"`
+			Status    string     `json:"status"`
+			Quantity  *int64     `json:"quantity"`
+			CloseTime *time.Time `json:"close_time"`
+			DiffSec   *int64     `json:"diff_sec"`
 		}
 		var row Row
 		if err := db.Raw(`
