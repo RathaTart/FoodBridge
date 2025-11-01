@@ -74,9 +74,12 @@ func toPostResp(p *entities.Post) *dto.PostResponse {
 		PostType:   p.PostType,
 		IsGiveaway: p.IsGiveaway,
 		Price:      p.Price, Quantity: p.Quantity,
-		OpenTime:   toUnixPtr(p.OpenTime), CloseTime: toUnixPtr(p.CloseTime),
-		Status:     string(p.Status),
-		Address:    p.Address, Lat: p.Lat, Lng: p.Lng, Phone: p.Phone,
+		OpenTime: toUnixPtr(p.OpenTime), CloseTime: toUnixPtr(p.CloseTime),
+		Status:   string(p.Status),
+		Address:  p.Address,
+		Province: p.Province,
+		District: p.District, 
+		Lat:      p.Lat, Lng: p.Lng, Phone: p.Phone,
 		Categories: jsonToStrings(p.Categories),
 		Images:     jsonToStrings(p.Images),
 		CreatedAt:  p.CreatedAt.Unix(), UpdatedAt: p.UpdatedAt.Unix(),
@@ -102,6 +105,18 @@ func toDetailResp(d *entities.PostDetail) *dto.PostDetailResponse {
 		CreatedAt:    d.CreatedAt.Unix(),
 		UpdatedAt:    d.UpdatedAt.Unix(),
 	}
+}
+
+func (s *serviceImpl) AutoCloseSweep(nowUnix int64) error {
+	// 1) ปิดโพสต์ที่หมดเวลา
+	if err := s.repo.CloseExpired(nowUnix); err != nil {
+		return err
+	}
+	// 2) ปิดโพสต์ที่สต็อกหมด (booking COMPLETED >= quantity)
+	if err := s.repo.CloseDepletedAll(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ============ POST ============
@@ -136,16 +151,18 @@ func (s *serviceImpl) Create(uid uint, req dto.CreatePostRequest) (*dto.PostResp
 	}
 
 	p := &entities.Post{
-		ProviderID: uid,
-		Title:      title,
+		ProviderID:  uid,
+		Title:       title,
 		Description: strings.TrimSpace(req.Description),
 
 		PostType: pt,
 
-		Status:  entities.PostStatusOpen,
-		Address: strings.TrimSpace(req.Address),
-		Lat:     req.Lat, Lng: req.Lng,
-		Phone:   strings.TrimSpace(req.Phone),
+		Status:   entities.PostStatusOpen,
+		Address:  strings.TrimSpace(req.Address),
+		Province: req.Province,
+		District: req.District,
+		Lat:      req.Lat, Lng: req.Lng,
+		Phone: strings.TrimSpace(req.Phone),
 
 		Categories: stringsToJSON(cats),
 		Images:     stringsToJSON(req.Images),
@@ -230,6 +247,13 @@ func (s *serviceImpl) Update(uid, postID uint, req dto.UpdatePostRequest) (*dto.
 	if req.Address != nil {
 		p.Address = strings.TrimSpace(*req.Address)
 	}
+	if req.Province != nil {
+		p.Province = *req.Province
+	}
+	if req.District != nil {
+		p.District = *req.District
+	}
+
 	if req.Phone != nil {
 		p.Phone = strings.TrimSpace(*req.Phone)
 	}

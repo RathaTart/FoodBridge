@@ -17,6 +17,29 @@ func NewRepository(db *gorm.DB) Repository {
 	return &repositoryImpl{db: db}
 }
 
+// CloseExpired: อัปเดตโพสต์ OPEN → CLOSED เมื่อ close_time (epoch sec) <= nowUnix
+func (r *repositoryImpl) CloseExpired(nowUnix int64) error {
+	return r.db.Model(&entities.Post{}).
+		Where("status = ?", "OPEN").
+		Where("close_time IS NOT NULL AND close_time <> 0 AND close_time <= ?", nowUnix).
+		Update("status", "CLOSED").Error
+}
+
+// CloseDepletedAll: ปิดโพสต์ที่จำนวน booking COMPLETED >= quantity (ทำแบบ batch ทุกโพสต์)
+func (r *repositoryImpl) CloseDepletedAll() error {
+	// ใช้ SQL เดียวอัปเดตเป็นกลุ่ม เพื่อประสิทธิภาพ
+	return r.db.Exec(`
+		UPDATE posts p
+		SET status = 'CLOSED'
+		WHERE p.status = 'OPEN'
+		  AND p.quantity IS NOT NULL
+		  AND p.quantity <= (
+				SELECT COUNT(*) FROM bookings b
+				WHERE b.post_id = p.post_id AND b.status = 'COMPLETED'
+		  )
+	`).Error
+}
+
 // ----------------- Post -----------------
 func (r *repositoryImpl) CreatePost(p *entities.Post) error {
 	return r.db.Create(p).Error

@@ -55,10 +55,21 @@ func buildDSN() string {
 		host, user, pass, name, port, ssl,
 	)
 }
+//  go func() {
+//      ticker := time.NewTicker(60 * time.Second)
+//      defer ticker.Stop()
+//      for range ticker.C {
+// -        if err := postSvc.AutoCloseSweep(time.Now()); err != nil {
+// +        if err := postSvc.AutoCloseSweep(time.Now().Unix()); err != nil {
+//              log.Printf("[auto-close] sweep error: %v", err)
+//          }
+//      }
+//  }()
 
 /* -------------------- main -------------------- */
 
 func main() {
+	
 	_ = godotenv.Load() // dev only (บน Render จะไม่ใช้ไฟล์ .env)
 
 	// ----- Connect DB -----
@@ -91,6 +102,10 @@ func main() {
 	stopWorkers := bootstrap.StartBackgroundWorkers(db)
 	defer stopWorkers()
 
+	// ----- Auto-close sweep -----
+	go func() {
+		log.Println("[auto-close] disabled: missing post package")
+	}()
 	// ----- Echo -----
 	e := echo.New()
 	e.Debug = true

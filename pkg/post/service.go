@@ -16,6 +16,9 @@ type Service interface {
 	UpdateDetail(uid, postID, detailID uint, req dto.UpdatePostDetailRequest) (*dto.PostDetailResponse, error)
 	DeleteDetail(uid, postID, detailID uint) error
 	ListDetails(uid, postID uint) ([]dto.PostDetailResponse, error)
+
+	// Auto-close sweep
+	AutoCloseSweep(nowUnix int64) error // กวาดปิดโพสต์ตามกฎเวลา/สต็อก
 }
 
 type Config struct {
