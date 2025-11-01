@@ -167,6 +167,10 @@ func (s *service) List(ctx context.Context, f Filter) ([]entities.Booking, error
 	return s.repo.ListBookings(ctx, f)
 }
 
+func (s *service) CountReceivers(ctx context.Context, f Filter) (int64, error) {
+	return s.repo.CountReceivers(ctx, f)
+}
+
 func (s *service) Cancel(ctx context.Context, id int64) error {
 	now := time.Now()
 	var toSend []pendingNotif

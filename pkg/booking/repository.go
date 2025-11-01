@@ -27,6 +27,7 @@ type Repo interface {
 	UpdateBooking(ctx context.Context, b *entities.Booking) error
 	GetBookingByID(ctx context.Context, id int64, forUpdate bool) (*entities.Booking, error)
 	ListBookings(ctx context.Context, f Filter) ([]entities.Booking, error)
+	CountReceivers(ctx context.Context, f Filter) (int64, error)
 
 	// QR code
 	GetBookingByQRToken(ctx context.Context, token string, forUpdate bool) (*entities.Booking, error)

@@ -19,6 +19,7 @@ type Service interface {
 	Create(ctx context.Context, postID int64, receiverUserID int64) (*entities.Booking, error)
 	Get(ctx context.Context, id int64) (*entities.Booking, error)
 	List(ctx context.Context, f Filter) ([]entities.Booking, error)
+	CountReceivers(ctx context.Context, f Filter) (int64, error)
 	Cancel(ctx context.Context, id int64) error
 	Complete(ctx context.Context, id int64) error
 

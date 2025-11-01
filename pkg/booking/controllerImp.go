@@ -30,6 +30,7 @@ func (h *controller) RegisterUnderPosts(posts *echo.Group) {
 
 func (h *controller) list(c echo.Context) error {
 	var f Filter
+
 	if v := c.QueryParam("post_id"); v != "" {
 		id, _ := strconv.ParseInt(v, 10, 64)
 		f.PostID = &id
@@ -38,15 +39,40 @@ func (h *controller) list(c echo.Context) error {
 		id, _ := strconv.ParseInt(v, 10, 64)
 		f.ReceiverUserID = &id
 	}
+	// status supports multiple, comma-separated (e.g., PENDING,QUEUED)
 	if v := c.QueryParam("status"); v != "" {
-		s := entities.BookingStatus(v)
-		f.Status = &s
+		parts := strings.Split(v, ",")
+		if len(parts) > 1 {
+			tmp := make([]string, 0, len(parts))
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" { tmp = append(tmp, p) }
+			}
+			if len(tmp) > 0 {
+				f.Statuses = tmp
+				f.Status = nil
+			}
+		} else {
+			s := entities.BookingStatus(strings.TrimSpace(v))
+			f.Status = &s
+			f.Statuses = nil
+		}
 	}
-	out, err := h.svc.List(c.Request().Context(), f)
+
+	list, err := h.svc.List(c.Request().Context(), f)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, dto.FromEntities(out))
+
+	total, err := h.svc.CountReceivers(c.Request().Context(), f) // total rows matching filter
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"items":          dto.FromEntities(list),
+		"receiver_count": total,
+	})
 }
 
 func (h *controller) get(c echo.Context) error {
