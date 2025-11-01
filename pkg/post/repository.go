@@ -1,6 +1,8 @@
 package post
 
 import (
+
+
 	"github.com/RathaTart/FoodBridge/dto"
 	"github.com/RathaTart/FoodBridge/entities"
 )
@@ -21,6 +23,6 @@ type Repository interface {
 	FindDetail(postID, detailID uint) (*entities.PostDetail, error)
 
 	// Auto-close helpers
-	CloseExpired(nowUnix int64) error          // ปิดโพสต์ที่เลยเวลา close_time
+	CloseExpired(nowUnix int64) error     // ปิดโพสต์ที่เลยเวลา close_time
 	CloseDepletedAll() error                        // ปิดโพสต์ที่สต็อกหมด (สแกนทุกโพสต์แบบ batch)
 }

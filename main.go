@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/RathaTart/FoodBridge/databases"
 	"github.com/RathaTart/FoodBridge/entities"
 	"github.com/RathaTart/FoodBridge/server" // ใช้ AuthMiddleware
-	"github.com/RathaTart/FoodBridge/server/routes"
 	"github.com/RathaTart/FoodBridge/server/bootstrap"
+	"github.com/RathaTart/FoodBridge/server/routes"
 
 	"github.com/RathaTart/FoodBridge/app"
 	"github.com/joho/godotenv"
@@ -55,21 +56,10 @@ func buildDSN() string {
 		host, user, pass, name, port, ssl,
 	)
 }
-//  go func() {
-//      ticker := time.NewTicker(60 * time.Second)
-//      defer ticker.Stop()
-//      for range ticker.C {
-// -        if err := postSvc.AutoCloseSweep(time.Now()); err != nil {
-// +        if err := postSvc.AutoCloseSweep(time.Now().Unix()); err != nil {
-//              log.Printf("[auto-close] sweep error: %v", err)
-//          }
-//      }
-//  }()
 
 /* -------------------- main -------------------- */
 
 func main() {
-	
 	_ = godotenv.Load() // dev only (บน Render จะไม่ใช้ไฟล์ .env)
 
 	// ----- Connect DB -----
@@ -102,10 +92,42 @@ func main() {
 	stopWorkers := bootstrap.StartBackgroundWorkers(db)
 	defer stopWorkers()
 
-	// ----- Auto-close sweep -----
+	// ===== Auto-close sweep (ทุก 10 วิ) — ใช้ timestamptz เทียบกับ NOW() =====
 	go func() {
-		log.Println("[auto-close] disabled: missing post package")
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			// 1) ปิดโพสต์ที่หมดเวลา (close_time <= NOW())
+			tx1 := db.Model(&entities.Post{}).
+				Where("status = ?", "OPEN").
+				Where("close_time IS NOT NULL AND close_time <= NOW()").
+				Update("status", "CLOSED")
+			if tx1.Error != nil {
+				log.Printf("[auto-close] CloseExpired error: %v", tx1.Error)
+			} else if tx1.RowsAffected > 0 {
+				log.Printf("[auto-close] expired closed rows=%d", tx1.RowsAffected)
+			}
+
+			// 2) ปิดโพสต์ที่สต็อกหมด (จำนวน booking COMPLETED >= quantity)
+			tx2 := db.Exec(`
+				UPDATE posts p
+				SET status = 'CLOSED'
+				WHERE p.status = 'OPEN'
+				  AND p.quantity IS NOT NULL
+				  AND p.quantity > 0
+				  AND p.quantity <= (
+						SELECT COUNT(*) FROM bookings b
+						WHERE b.post_id = p.post_id AND b.status = 'COMPLETED'
+				  )
+			`)
+			if tx2.Error != nil {
+				log.Printf("[auto-close] CloseDepleted error: %v", tx2.Error)
+			} else if tx2.RowsAffected > 0 {
+				log.Printf("[auto-close] depleted closed rows=%d", tx2.RowsAffected)
+			}
+		}
 	}()
+
 	// ----- Echo -----
 	e := echo.New()
 	e.Debug = true
@@ -191,8 +213,97 @@ func main() {
 		return c.JSON(200, out)
 	})
 
+	// ==== DEBUG 1: บังคับรัน auto-close ตอนนี้ + คืนจำนวนแถวที่ปิด ====
+	e.POST("/debug/auto-close-now", func(c echo.Context) error {
+		nowUnix := time.Now().Unix()
+
+		tx1 := db.Model(&entities.Post{}).
+			Where("status = ?", "OPEN").
+			Where("close_time IS NOT NULL AND close_time <= NOW()").
+			Update("status", "CLOSED")
+
+		tx2 := db.Exec(`
+			UPDATE posts p
+			SET status = 'CLOSED'
+			WHERE p.status = 'OPEN'
+			  AND p.quantity IS NOT NULL
+			  AND p.quantity > 0
+			  AND p.quantity <= (
+					SELECT COUNT(*) FROM bookings b
+					WHERE b.post_id = p.post_id AND b.status = 'COMPLETED'
+			  )
+		`)
+
+		return c.JSON(200, echo.Map{
+			"now_unix":       nowUnix,
+			"expired_rows":   tx1.RowsAffected,
+			"expired_error":  errString(tx1.Error),
+			"depleted_rows":  tx2.RowsAffected,
+			"depleted_error": errString(tx2.Error),
+		})
+	})
+
+	// ==== DEBUG 2: แสดงแคนดิเดตที่จะถูกปิด (close_time <= NOW()) ====
+	e.GET("/debug/auto-close-candidates", func(c echo.Context) error {
+		type Row struct {
+			PostID    int64     `json:"post_id"`
+			Status    string    `json:"status"`
+			CloseTime time.Time `json:"close_time"`
+			DiffSec   int64     `json:"diff_sec"` // NOW() - close_time (หน่วยวินาที)
+		}
+		var rows []Row
+		if err := db.Raw(`
+			SELECT post_id, status, close_time,
+			       EXTRACT(EPOCH FROM (NOW() - close_time))::bigint AS diff_sec
+			FROM posts
+			WHERE status = 'OPEN'
+			  AND close_time IS NOT NULL
+			  AND close_time <= NOW()
+			ORDER BY close_time ASC
+			LIMIT 50
+		`).Scan(&rows).Error; err != nil {
+			return c.JSON(500, echo.Map{"error": err.Error()})
+		}
+		return c.JSON(200, echo.Map{
+			"now_unix":   time.Now().Unix(),
+			"count":      len(rows),
+			"candidates": rows,
+		})
+	})
+
+	// ==== DEBUG 3: ดูข้อมูลดิบของโพสต์เดียว พร้อม diff ====
+	e.GET("/debug/post/:id/raw", func(c echo.Context) error {
+		id := c.Param("id")
+		type Row struct {
+			PostID    int64     `json:"post_id"`
+			Status    string    `json:"status"`
+			Quantity  *int64    `json:"quantity"`
+			CloseTime *time.Time`json:"close_time"`
+			DiffSec   *int64    `json:"diff_sec"`
+		}
+		var row Row
+		if err := db.Raw(`
+			SELECT post_id, status, quantity, close_time,
+			       EXTRACT(EPOCH FROM (NOW() - close_time))::bigint AS diff_sec
+			FROM posts WHERE post_id = ?
+		`, id).Scan(&row).Error; err != nil {
+			return c.JSON(500, echo.Map{"error": err.Error()})
+		}
+		return c.JSON(200, echo.Map{
+			"now_unix": time.Now().Unix(),
+			"row":      row,
+		})
+	})
+
 	// ----- Start -----
 	port := getenv("PORT", "1323") // บน Render แนะนำตั้ง PORT เป็น env var
 	e.Logger.Infof("Starting server on :%s", port)
 	e.Logger.Fatal(e.Start(":" + port))
+}
+
+func errString(e error) string {
+	if e == nil {
+		return ""
+	}
+	return e.Error()
 }

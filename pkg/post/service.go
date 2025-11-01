@@ -18,7 +18,7 @@ type Service interface {
 	ListDetails(uid, postID uint) ([]dto.PostDetailResponse, error)
 
 	// Auto-close sweep
-	AutoCloseSweep(nowUnix int64) error // กวาดปิดโพสต์ตามกฎเวลา/สต็อก
+	AutoCloseSweep(nowUnix int64) error
 }
 
 type Config struct {

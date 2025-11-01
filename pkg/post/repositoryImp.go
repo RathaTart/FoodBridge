@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+
 	"github.com/RathaTart/FoodBridge/dto"
 	"github.com/RathaTart/FoodBridge/entities"
 	"gorm.io/gorm"
@@ -17,7 +18,7 @@ func NewRepository(db *gorm.DB) Repository {
 	return &repositoryImpl{db: db}
 }
 
-// CloseExpired: อัปเดตโพสต์ OPEN → CLOSED เมื่อ close_time (epoch sec) <= nowUnix
+// ปิดโพสต์ที่ close_time (epoch sec) <= nowUnix
 func (r *repositoryImpl) CloseExpired(nowUnix int64) error {
 	return r.db.Model(&entities.Post{}).
 		Where("status = ?", "OPEN").
@@ -25,9 +26,8 @@ func (r *repositoryImpl) CloseExpired(nowUnix int64) error {
 		Update("status", "CLOSED").Error
 }
 
-// CloseDepletedAll: ปิดโพสต์ที่จำนวน booking COMPLETED >= quantity (ทำแบบ batch ทุกโพสต์)
+// ปิดโพสต์ที่สต็อกหมด (เดิมใช้ได้อยู่ ไม่ต้องแก้)
 func (r *repositoryImpl) CloseDepletedAll() error {
-	// ใช้ SQL เดียวอัปเดตเป็นกลุ่ม เพื่อประสิทธิภาพ
 	return r.db.Exec(`
 		UPDATE posts p
 		SET status = 'CLOSED'
@@ -39,6 +39,7 @@ func (r *repositoryImpl) CloseDepletedAll() error {
 		  )
 	`).Error
 }
+
 
 // ----------------- Post -----------------
 func (r *repositoryImpl) CreatePost(p *entities.Post) error {

@@ -108,16 +108,15 @@ func toDetailResp(d *entities.PostDetail) *dto.PostDetailResponse {
 }
 
 func (s *serviceImpl) AutoCloseSweep(nowUnix int64) error {
-	// 1) ปิดโพสต์ที่หมดเวลา
 	if err := s.repo.CloseExpired(nowUnix); err != nil {
 		return err
 	}
-	// 2) ปิดโพสต์ที่สต็อกหมด (booking COMPLETED >= quantity)
 	if err := s.repo.CloseDepletedAll(); err != nil {
 		return err
 	}
 	return nil
 }
+
 
 // ============ POST ============
 
