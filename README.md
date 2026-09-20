@@ -1,3 +1,32 @@
+# FoodBridge | Food-sharing backend
+
+A backend API for sharing free meals, with user accounts, food posts, bookings, comments, notifications, and reporting workflows.
+
+**Stack:** Go · Echo · GORM · PostgreSQL · Docker
+
+## Project at a glance
+
+- **API and authentication:** public registration/login routes and JWT-protected application routes.
+- **Application structure:** feature modules separate controllers, services, and repositories.
+- **Data layer:** PostgreSQL models managed through GORM, with schema initialization at startup.
+- **Development environment:** Docker Compose supplies local services.
+
+For a code walkthrough, start with [`main.go`](main.go), then [`server/routes`](server/routes) and [`pkg/booking`](pkg/booking).
+
+## Setup notes for the current code
+
+The module requires **Go 1.24.0** and specifies the **Go 1.24.5 toolchain**. These supersede the older version listed in the original guide below.
+
+1. Clone this repository and copy `.env.example` to `.env`.
+2. Configure `POSTGRES_DSN`, or all of `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, and `DB_SSLMODE`, to match your local database. Configure authentication and any external integrations required by the features you use.
+3. Start the local database with `docker compose up -d db`.
+4. Download dependencies with `go mod download`, then run `go run ./main.go`.
+5. Check `http://localhost:1323/health`, or the port you set through `PORT`. The current entry point defaults to **1323** and returns JSON with `status`, `app`, and `db` fields; check the database status as well as the HTTP response.
+
+The original Thai documentation follows for additional context.
+
+---
+
 # 🍚 FoodBridge Backend
 
 Backend สำหรับโปรเจกต์ **FoodBridge** (แจกข้าวฟรี)  
